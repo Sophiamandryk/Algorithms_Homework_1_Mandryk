@@ -47,21 +47,7 @@ public class Main {
         Task3 task3 = new Task3(students);
         task3.runDemo();
 
-        // === Run Python visualization ===
-        System.out.println("\n📊 Running Python visualization...");
-        try {
-            Process process = new ProcessBuilder("python3", "benchmark_plot.py")
-                    .directory(new File("apps/src/main/java/ua/edu/ucu"))
-                    .inheritIO()
-                    .start();
-            process.waitFor();
-            System.out.println("✅ Visualization finished successfully!");
-        } catch (Exception e) {
-            System.err.println("⚠️ Could not run Python visualization automatically: " + e.getMessage());
-            System.out.println("Please run manually:");
-            System.out.println("   cd apps/src/main/java/ua/edu/ucu");
-            System.out.println("   python3 benchmark_plot.py");
-        }
+    
     }
 }
 
