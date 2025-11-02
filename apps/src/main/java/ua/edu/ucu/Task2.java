@@ -1,250 +1,276 @@
 package ua.edu.ucu;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 /**
- * Task 2 — Variant V5
- * Операції:
- * 1) Повернути 100 студентів з найвищим рейтингом
- * 2) Встановити рейтинг студенту за його електронною поштою (m_email)
- * 3) Знайти групу, в якій найбільший середній рейтинг студентів
- * 
- * Структури даних:
- * - TreeSet<Student> для підтримки сортування за рейтингом (спадання)
- * - HashMap<String, Student> для O(1) пошуку за email
- * - HashMap<String, GroupStats> для відстеження статистики груп
+ * Task 2 — Варіант із трьома реалізаціями:
+ * 1️⃣ TreeSet + HashMap (оптимальний)
+ * 2️⃣ ArrayList (простий)
+ * 3️⃣ TreeMap (альтернатива)
  */
 public class Task2 {
-    
-    // TreeSet з компаратором: спадання за рейтингом, потім за email для унікальності
-    private TreeSet<Student> studentsByRating;
-    
-    // Швидкий пошук за email
-    private HashMap<String, Student> studentsByEmail;
-    
-    // Статистика груп для операції 3
-    private HashMap<String, GroupStats> groupStats;
-    
-    // Допоміжний клас для відстеження статистики груп
-    private static class GroupStats {
-        double totalRating = 0.0;
-        int count = 0;
-        
-        void addStudent(float rating) {
-            totalRating += rating;
-            count++;
+
+    /* ----------------------------------------------------
+     *  VARIANT 1 — TreeSet + HashMap
+     * ---------------------------------------------------- */
+    public static class Variant1 {
+        private TreeSet<Student> sorted;
+        private HashMap<String, Student> byEmail;
+        private HashMap<String, GroupStats> groupStats;
+
+        private static class GroupStats {
+            double total = 0;
+            int count = 0;
+            void add(float r) { total += r; count++; }
+            void update(float oldR, float newR) { total += newR - oldR; }
+            double avg() { return count == 0 ? 0 : total / count; }
         }
-        
-        void updateRating(float oldRating, float newRating) {
-            totalRating = totalRating - oldRating + newRating;
-        }
-        
-        double getAverageRating() {
-            return count > 0 ? totalRating / count : 0.0;
-        }
-    }
-    
-    public Task2(List<Student> students) {
-        // Ініціалізація TreeSet з компаратором (спадання за рейтингом)
-        studentsByRating = new TreeSet<>((s1, s2) -> {
-            int cmp = Float.compare(s2.getRating(), s1.getRating()); // спадання
-            if (cmp != 0) return cmp;
-            return s1.getEmail().compareTo(s2.getEmail()); // для унікальності
-        });
-        
-        studentsByEmail = new HashMap<>();
-        groupStats = new HashMap<>();
-        
-        // Заповнення структур даних
-        for (Student s : students) {
-            studentsByRating.add(s);
-            studentsByEmail.put(s.getEmail(), s);
-            
-            groupStats.computeIfAbsent(s.getGroup(), k -> new GroupStats())
-                      .addStudent(s.getRating());
-        }
-        
-        System.out.println("✅ Task 2 ініціалізовано: " + students.size() + " студентів проіндексовано");
-    }
-    
-    /**
-     * Операція 1: Повернути 100 студентів з найвищим рейтингом
-     * Складність: O(100) = O(1)
-     */
-    public List<Student> getTop100Students() {
-        List<Student> result = new ArrayList<>();
-        int count = 0;
-        
-        for (Student s : studentsByRating) {
-            if (count >= 100) break;
-            result.add(s);
-            count++;
-        }
-        
-        return result;
-    }
-    
-    /**
-     * Операція 2: Встановити рейтинг студенту за його електронною поштою
-     * Складність: O(log n) через повторну вставку в TreeSet
-     */
-    public boolean setRatingByEmail(String email, float newRating) {
-        Student student = studentsByEmail.get(email);
-        if (student == null) {
-            return false;
-        }
-        
-        float oldRating = student.getRating();
-        String group = student.getGroup();
-        
-        // Видалити з TreeSet (потрібен старий стан)
-        studentsByRating.remove(student);
-        
-        // Оновити рейтинг
-        student.setRating(newRating);
-        
-        // Повторно вставити в TreeSet з новим рейтингом
-        studentsByRating.add(student);
-        
-        // Оновити статистику групи
-        GroupStats stats = groupStats.get(group);
-        if (stats != null) {
-            stats.updateRating(oldRating, newRating);
-        }
-        
-        return true;
-    }
-    
-    /**
-     * Операція 3: Знайти групу з найбільшим середнім рейтингом
-     * Складність: O(g) g - кількість груп 
-     */
-    public String getGroupWithHighestAvgRating() {
-        String bestGroup = null;
-        double maxAvg = Double.NEGATIVE_INFINITY;
-        
-        for (Map.Entry<String, GroupStats> entry : groupStats.entrySet()) {
-            double avg = entry.getValue().getAverageRating();
-            if (avg > maxAvg) {
-                maxAvg = avg;
-                bestGroup = entry.getKey();
+
+        public Variant1(List<Student> students) {
+            sorted = new TreeSet<>((a, b) -> {
+                int cmp = Float.compare(b.getRating(), a.getRating());
+                return (cmp != 0) ? cmp : a.getEmail().compareTo(b.getEmail());
+            });
+            byEmail = new HashMap<>();
+            groupStats = new HashMap<>();
+            for (Student s : students) {
+                sorted.add(s);
+                byEmail.put(s.getEmail(), s);
+                groupStats.computeIfAbsent(s.getGroup(), k -> new GroupStats()).add(s.getRating());
             }
         }
-        
-        return bestGroup;
+
+        public List<Student> getTop100() {
+            List<Student> res = new ArrayList<>();
+            int i = 0;
+            for (Student s : sorted) {
+                if (i++ >= 100) break;
+                res.add(s);
+            }
+            return res;
+        }
+
+        public void setRating(String email, float newR) {
+            Student s = byEmail.get(email);
+            if (s == null) return;
+            sorted.remove(s);
+            float old = s.getRating();
+            s.setRating(newR);
+            sorted.add(s);
+            groupStats.get(s.getGroup()).update(old, newR);
+        }
+
+        public String bestGroup() {
+            String best = null;
+            double max = -1;
+            for (var e : groupStats.entrySet()) {
+                double avg = e.getValue().avg();
+                if (avg > max) {
+                    max = avg;
+                    best = e.getKey();
+                }
+            }
+            return best;
+        }
     }
-    
-    /**
-     * Отримати середній рейтинг для конкретної групи
-     */
-    public double getGroupAvgRating(String group) {
-        GroupStats stats = groupStats.get(group);
-        return stats != null ? stats.getAverageRating() : 0.0;
+
+    /* ----------------------------------------------------
+     *  VARIANT 2 — ArrayList (простий)
+     * ---------------------------------------------------- */
+    public static class Variant2 {
+        private ArrayList<Student> list;
+
+        public Variant2(List<Student> students) {
+            list = new ArrayList<>(students);
+        }
+
+        public List<Student> getTop100() {
+            list.sort((a, b) -> Float.compare(b.getRating(), a.getRating()));
+            return list.subList(0, Math.min(100, list.size()));
+        }
+
+        public void setRating(String email, float newR) {
+            for (Student s : list)
+                if (s.getEmail().equals(email)) {
+                    s.setRating(newR);
+                    break;
+                }
+        }
+
+        public String bestGroup() {
+            HashMap<String, float[]> map = new HashMap<>();
+            for (Student s : list) {
+                map.putIfAbsent(s.getGroup(), new float[]{0, 0});
+                float[] arr = map.get(s.getGroup());
+                arr[0] += s.getRating();
+                arr[1]++;
+            }
+            double max = -1;
+            String best = null;
+            for (var e : map.entrySet()) {
+                double avg = e.getValue()[0] / e.getValue()[1];
+                if (avg > max) {
+                    max = avg;
+                    best = e.getKey();
+                }
+            }
+            return best;
+        }
     }
-    
-    /**
-     * Демонстрація роботи всіх операцій
-     */
+
+    /* ----------------------------------------------------
+     *  VARIANT 3 — TreeMap
+     * ---------------------------------------------------- */
+    public static class Variant3 {
+        private TreeMap<Float, List<Student>> ratingMap;
+        private HashMap<String, Student> byEmail;
+        private HashMap<String, float[]> groupStats;
+
+        public Variant3(List<Student> students) {
+            ratingMap = new TreeMap<>(Comparator.reverseOrder());
+            byEmail = new HashMap<>();
+            groupStats = new HashMap<>();
+            for (Student s : students) {
+                ratingMap.computeIfAbsent(s.getRating(), k -> new ArrayList<>()).add(s);
+                byEmail.put(s.getEmail(), s);
+                groupStats.computeIfAbsent(s.getGroup(), k -> new float[]{0, 0});
+                float[] g = groupStats.get(s.getGroup());
+                g[0] += s.getRating();
+                g[1]++;
+            }
+        }
+
+        public List<Student> getTop100() {
+            List<Student> res = new ArrayList<>();
+            for (var entry : ratingMap.entrySet()) {
+                for (Student s : entry.getValue()) {
+                    if (res.size() >= 100) return res;
+                    res.add(s);
+                }
+            }
+            return res;
+        }
+
+        public void setRating(String email, float newR) {
+            Student s = byEmail.get(email);
+            if (s == null) return;
+            List<Student> oldList = ratingMap.get(s.getRating());
+            if (oldList != null) oldList.remove(s);
+            s.setRating(newR);
+            ratingMap.computeIfAbsent(newR, k -> new ArrayList<>()).add(s);
+        }
+
+        public String bestGroup() {
+            String best = null;
+            double max = -1;
+            for (var e : groupStats.entrySet()) {
+                double avg = e.getValue()[0] / e.getValue()[1];
+                if (avg > max) {
+                    max = avg;
+                    best = e.getKey();
+                }
+            }
+            return best;
+        }
+    }
+
+    /* ----------------------------------------------------
+     *  DEMO — для перевірки роботи
+     * ---------------------------------------------------- */
     public void runDemo() {
-        System.out.println("\n=== Демонстрація Task 2 (Варіант V5) ===\n");
-        
-        // Операція 1: Топ 100 студентів
-        System.out.println("📊 Операція 1: Топ 10 студентів за рейтингом:");
-        List<Student> top = getTop100Students();
-        for (int i = 0; i < Math.min(10, top.size()); i++) {
-            Student s = top.get(i);
-            System.out.printf("  %2d. %.2f — %s %s (%s)\n", 
-                i + 1, s.getRating(), s.getName(), s.getSurname(), s.getGroup());
+        System.out.println("\n=== Task 2 Demo ===");
+
+        List<Student> demoStudents = new ArrayList<>(List.of(
+            new Student("Anna", "Melnyk", "anna@student.org", 2000, 5, 14, "A1", 85.5f, "(099)123-45-67"),
+            new Student("Bohdan", "Koval", "bohdan@student.org", 2001, 7, 3, "A1", 91.3f, "(067)234-56-78"),
+            new Student("Olha", "Lys", "olha@student.org", 2002, 1, 20, "B2", 75.2f, "(050)345-67-89")
+        ));
+
+        Variant1 v1 = new Variant1(demoStudents);
+        System.out.println("Top student (TreeSet+HashMap): " + v1.getTop100().get(0).getName());
+        System.out.println("Best group: " + v1.bestGroup());
+    }
+
+    /* ----------------------------------------------------
+     *  BENCHMARK
+     * ---------------------------------------------------- */
+    public static void runBenchmark(List<Student> students, int A, int B, int C) {
+        Random rnd = new Random();
+        int[] sizes = {100, 1000, 10000, 100000};
+
+        System.out.println("\n=== BENCHMARK (A:B:C = " + A + ":" + B + ":" + C + ") ===");
+
+        for (int n : sizes) {
+            List<Student> subset = students.subList(0, Math.min(n, students.size()));
+            long[] ops = new long[3];
+
+            Variant1 v1 = new Variant1(subset);
+            ops[0] = benchmarkVariant(() -> randomOpV1(v1, subset, rnd, A, B, C));
+
+            Variant2 v2 = new Variant2(subset);
+            ops[1] = benchmarkVariant(() -> randomOpV2(v2, subset, rnd, A, B, C));
+
+            Variant3 v3 = new Variant3(subset);
+            ops[2] = benchmarkVariant(() -> randomOpV3(v3, subset, rnd, A, B, C));
+
+            System.out.printf("Розмір %6d | TreeSet+HashMap: %-8d | ArrayList: %-8d | TreeMap: %-8d%n",
+                    n, ops[0], ops[1], ops[2]);
         }
-        
-        // Операція 3: Група з найвищим середнім
-        System.out.println("\n🏆 Операція 3: Група з найвищим середнім рейтингом:");
-        String bestGroup = getGroupWithHighestAvgRating();
-        double bestAvg = getGroupAvgRating(bestGroup);
-        System.out.printf("  %s з середнім рейтингом: %.2f\n", bestGroup, bestAvg);
-        
-        // Операція 2: Оновлення рейтингу
-        System.out.println("\n✏️ Операція 2: Оновлення рейтингу студента...");
-        if (!top.isEmpty()) {
-            Student firstStudent = top.get(0);
-            String email = firstStudent.getEmail();
-            float oldRating = firstStudent.getRating();
-            float newRating = 50.0f;
-            
-            System.out.printf("  До: %s має рейтинг %.2f\n", email, oldRating);
-            setRatingByEmail(email, newRating);
-            System.out.printf("  Після: %s має рейтинг %.2f\n", email, newRating);
-            
-            // Перевірка змін у топі
-            List<Student> newTop = getTop100Students();
-            System.out.println("\n  Новий топ 3 студенти:");
-            for (int i = 0; i < Math.min(3, newTop.size()); i++) {
-                Student s = newTop.get(i);
-                System.out.printf("    %d. %.2f — %s %s\n", 
-                    i + 1, s.getRating(), s.getName(), s.getSurname());
-            }
+    }
+
+    private static long benchmarkVariant(Runnable action) {
+        long start = System.currentTimeMillis();
+        long end = start + 10_000;
+        long ops = 0;
+        while (System.currentTimeMillis() < end) {
+            action.run();
+            ops++;
         }
+        return ops;
     }
-    
-    
-    // Ппродуктивність
-    
-    public long runBenchmark(int durationSeconds, int ratioA, int ratioB, int ratioC) {
-        Random rand = new Random();
-        long operations = 0;
-        long startTime = System.currentTimeMillis();
-        long endTime = startTime + (durationSeconds * 1000L);
-        
-        int totalRatio = ratioA + ratioB + ratioC;
-        List<String> emails = new ArrayList<>(studentsByEmail.keySet());
-        
-        while (System.currentTimeMillis() < endTime) {
-            int choice = rand.nextInt(totalRatio);
-            
-            if (choice < ratioA) {
-                // Операція 1: Отримати топ 100
-                getTop100Students();
-            } else if (choice < ratioA + ratioB) {
-                // Операція 2: Встановити рейтинг
-                String email = emails.get(rand.nextInt(emails.size()));
-                float newRating = rand.nextFloat() * 100;
-                setRatingByEmail(email, newRating);
-            } else {
-                // Операція 3: Знайти найкращу групу
-                getGroupWithHighestAvgRating();
-            }
-            
-            operations++;
-        }
-        
-        return operations;
+
+    private static void randomOpV1(Variant1 v, List<Student> s, Random rnd, int A, int B, int C) {
+        int total = A + B + C;
+        int r = rnd.nextInt(total);
+        if (r < A) v.getTop100();
+        else if (r < A + B) v.setRating(s.get(rnd.nextInt(s.size())).getEmail(), rnd.nextFloat() * 100);
+        else v.bestGroup();
     }
-    
-    
-    // Оцінка використання пам'яті
-    
-    public long estimateMemoryUsage() {
-        int studentCount = studentsByEmail.size();
-        int groupCount = groupStats.size();
-        
-        
-        long studentObjects = studentCount * 200L;
-        long treeSetOverhead = studentCount * 40L;
-        long hashMapOverhead = studentCount * 40L;
-        long groupStatsMemory = groupCount * 32L;
-        
-        return studentObjects + treeSetOverhead + hashMapOverhead + groupStatsMemory;
+
+    private static void randomOpV2(Variant2 v, List<Student> s, Random rnd, int A, int B, int C) {
+        int total = A + B + C;
+        int r = rnd.nextInt(total);
+        if (r < A) v.getTop100();
+        else if (r < A + B) v.setRating(s.get(rnd.nextInt(s.size())).getEmail(), rnd.nextFloat() * 100);
+        else v.bestGroup();
     }
-    
-    /**
-     * Отримати всіх студентів (для додаткових операцій)
-     */
-    public List<Student> getAllStudents() {
-        return new ArrayList<>(studentsByRating);
+
+    private static void randomOpV3(Variant3 v, List<Student> s, Random rnd, int A, int B, int C) {
+        int total = A + B + C;
+        int r = rnd.nextInt(total);
+        if (r < A) v.getTop100();
+        else if (r < A + B) v.setRating(s.get(rnd.nextInt(s.size())).getEmail(), rnd.nextFloat() * 100);
+        else v.bestGroup();
     }
+    public static long benchmarkVariant1(List<Student> students, int A, int B, int C) {
+        Variant1 v1 = new Variant1(students);
+        return benchmarkVariant(() -> randomOpV1(v1, students, new Random(), A, B, C));
+    }
+
+    public static long benchmarkVariant2(List<Student> students, int A, int B, int C) {
+        Variant2 v2 = new Variant2(students);
+        return benchmarkVariant(() -> randomOpV2(v2, students, new Random(), A, B, C));
+    }
+
+    public static long benchmarkVariant3(List<Student> students, int A, int B, int C) {
+        Variant3 v3 = new Variant3(students);
+        return benchmarkVariant(() -> randomOpV3(v3, students, new Random(), A, B, C));
+    }
+
 }
